@@ -13,7 +13,8 @@
 <meta name="theme-color" content="#F6F1EA">
 <title>Diario GET</title>
 <script>
-(function(){try{var t=localStorage.getItem("diarioget.theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);}catch(e){}})();
+/* Ogni apertura parte dal tema automatico del telefono: chiaro o scuro scelti a mano valgono finché la pagina resta aperta */
+(function(){try{localStorage.removeItem("diarioget.theme");var t=sessionStorage.getItem("diarioget.theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);}catch(e){}})();
 </script>
 <style>
 :root{
@@ -92,7 +93,13 @@ body.compact .brand small{opacity:0;max-height:0}
   .tabbar span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   body{padding-bottom:calc(88px + env(safe-area-inset-bottom))}
   body .saved{bottom:calc(74px + env(safe-area-inset-bottom))}
+  /* Scorrendo col dito verso il basso intestazione e barra escono dallo schermo (classe "nobars" sul body, messa dallo script) */
+  .top,.tabbar{transition:transform .25s ease}
+  body.nobars .top{transform:translateY(calc(env(safe-area-inset-top) - 100%))}
+  body.nobars .tabbar{transform:translateY(calc(100% - env(safe-area-inset-bottom)))}
+  body.nobars .saved{bottom:calc(16px + env(safe-area-inset-bottom))}
 }
+@media (max-width:759px) and (prefers-reduced-motion:reduce){.top,.tabbar{transition:none}}
 /* Pulsanti: un piccolo riscontro visivo al tocco, al posto dell'effetto del mouse */
 @media (hover:none){.tbtn:active,.opt:active,.tabbar button:active,.chip:active,.day:active,.pday:active{opacity:.7}}
 .top .wrap.views{min-height:0;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:8px}
@@ -805,7 +812,7 @@ function esc(s){return String(s).replace(/[&<>"']/g,function(c){return {"&":"&am
 
 /* ---------- Scorrimento: tiene conto dell'intestazione in alto e della barra delle sezioni in basso ---------- */
 function topH(){var t=document.querySelector(".top");return t?t.getBoundingClientRect().bottom:0;}
-function botH(){var b=document.querySelector(".tabbar");return b?b.offsetHeight:0;}
+function botH(){var b=document.querySelector(".tabbar");return b&&b.offsetHeight?Math.max(0,window.innerHeight-b.getBoundingClientRect().top):0;}
 function smooth(){return window.matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth";}
 function toDays(){window.scrollTo({top:$("dcDays").getBoundingClientRect().top+window.scrollY-topH()-8,behavior:smooth()});}
 /* Dopo una risposta, sul telefono porta la riga successiva nella parte alta dello schermo (se non è già ben visibile) */
@@ -1449,7 +1456,7 @@ function isDark(){var m=themeMode();return m==="dark"||(m==="auto"&&darkMQ.match
 function paintTheme(){var c=getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();var mt=document.querySelector('meta[name="theme-color"]');if(mt&&c)mt.setAttribute("content",c);}
 function setTheme(m){
   if(m==="light"||m==="dark")document.documentElement.setAttribute("data-theme",m);else document.documentElement.removeAttribute("data-theme");
-  try{if(m==="auto")localStorage.removeItem(TK);else localStorage.setItem(TK,m);}catch(e){}
+  try{if(m==="auto")sessionStorage.removeItem(TK);else sessionStorage.setItem(TK,m);}catch(e){}
   paintTheme();syncThemeSeg();
 }
 function syncThemeSeg(){var m=themeMode();document.querySelectorAll("#themeSeg [data-th]").forEach(function(b){b.setAttribute("aria-pressed",b.dataset.th===m?"true":"false");});}
@@ -3754,6 +3761,42 @@ document.querySelectorAll(".views [data-view], .tabbar [data-view]").forEach(fun
   var on=false, t=false;
   function upd(){t=false;var y=window.scrollY||0;if(!on&&y>40){on=true;document.body.classList.add("compact");}else if(on&&y<8){on=false;document.body.classList.remove("compact");}}
   window.addEventListener("scroll",function(){if(!t){t=true;requestAnimationFrame(upd);}},{passive:true});
+})();
+
+/* ---------- Telefono: intestazione e barra in basso escono dallo schermo scorrendo verso il basso ----------
+   Contano solo gli scorrimenti fatti dalla persona (dito, rotellina, tasti), dopo almeno 36px: quelli dello script,
+   come advance() dopo una risposta, non le nascondono. Tornano appena si scorre verso l'alto, in cima, a fondo pagina
+   e dopo un attimo di pausa (non mentre si scrive, così la tastiera ha tutto lo spazio). */
+(function(){
+  var phone=window.matchMedia("(max-width:759px)"), off=false, t=false, lastY=window.scrollY||0, anchor=lastY, dir=0, moved=0, y0=0, pause;
+  function set(v){if(v===off)return;off=v;document.body.classList.toggle("nobars",v);}
+  function later(){clearTimeout(pause);if(off)pause=setTimeout(function(){if(!typing())set(false);},1200);}
+  function typing(){var a=document.activeElement;return !!a&&(a.tagName==="TEXTAREA"||a.isContentEditable||(a.tagName==="INPUT"&&!/^(button|checkbox|radio|range|color|file|submit|reset)$/.test(a.type)));}
+  function upd(){
+    t=false;
+    var y=Math.max(0,window.scrollY||0), max=document.documentElement.scrollHeight-window.innerHeight, d=y-lastY;
+    lastY=y;
+    if(!phone.matches||y<8||y>=max-4){set(false);anchor=y;dir=0;}
+    else if(Date.now()-moved>1000){anchor=y;dir=0;}
+    else{
+      var nd=d>0?1:d<0?-1:dir;
+      if(nd!==dir){dir=nd;anchor=y-d;}
+      if(dir>0&&y-anchor>=36&&y>120)set(true);
+      else if(dir<0&&anchor-y>=6)set(false);
+    }
+    later();
+  }
+  window.addEventListener("scroll",function(){if(!t){t=true;requestAnimationFrame(upd);}},{passive:true});
+  /* Un tocco non è uno scorrimento: il dito deve muoversi di almeno 10px */
+  window.addEventListener("touchstart",function(e){moved=0;y0=e.touches[0].clientY;},{passive:true});
+  window.addEventListener("touchmove",function(e){if(Math.abs(e.touches[0].clientY-y0)>10)moved=Date.now();},{passive:true});
+  window.addEventListener("wheel",function(){moved=Date.now();},{passive:true});
+  window.addEventListener("keydown",function(e){if(/^(ArrowUp|ArrowDown|PageUp|PageDown|Home|End| )$/.test(e.key))moved=Date.now();});
+  /* Con la tastiera esterna (Tab) intestazione e barra tornano se il fuoco ci arriva sopra */
+  document.addEventListener("focusin",function(e){if(e.target.closest&&e.target.closest(".top,.tabbar"))set(false);});
+  document.addEventListener("focusout",function(){setTimeout(later,0);});
+  window.addEventListener("hashchange",function(){set(false);});
+  if(phone.addEventListener)phone.addEventListener("change",function(){if(!phone.matches)set(false);});
 })();
 
 /* ---------- Avvio ---------- */
