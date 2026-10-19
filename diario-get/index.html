@@ -3765,13 +3765,11 @@ document.querySelectorAll(".views [data-view], .tabbar [data-view]").forEach(fun
 
 /* ---------- Telefono: intestazione e barra in basso escono dallo schermo scorrendo verso il basso ----------
    Contano solo gli scorrimenti fatti dalla persona (dito, rotellina, tasti), dopo almeno 36px: quelli dello script,
-   come advance() dopo una risposta, non le nascondono. Tornano appena si scorre verso l'alto, in cima, a fondo pagina
-   e dopo un attimo di pausa (non mentre si scrive, così la tastiera ha tutto lo spazio). */
+   come advance() dopo una risposta, non le nascondono. Tornano appena si scorre verso l'alto, in cima e a fondo pagina;
+   stando fermi restano nascoste, così si legge a tutto schermo. */
 (function(){
-  var phone=window.matchMedia("(max-width:759px)"), off=false, t=false, lastY=window.scrollY||0, anchor=lastY, dir=0, moved=0, y0=0, pause;
+  var phone=window.matchMedia("(max-width:759px)"), off=false, t=false, lastY=window.scrollY||0, anchor=lastY, dir=0, moved=0, y0=0;
   function set(v){if(v===off)return;off=v;document.body.classList.toggle("nobars",v);}
-  function later(){clearTimeout(pause);if(off)pause=setTimeout(function(){if(!typing())set(false);},1200);}
-  function typing(){var a=document.activeElement;return !!a&&(a.tagName==="TEXTAREA"||a.isContentEditable||(a.tagName==="INPUT"&&!/^(button|checkbox|radio|range|color|file|submit|reset)$/.test(a.type)));}
   function upd(){
     t=false;
     var y=Math.max(0,window.scrollY||0), max=document.documentElement.scrollHeight-window.innerHeight, d=y-lastY;
@@ -3784,7 +3782,6 @@ document.querySelectorAll(".views [data-view], .tabbar [data-view]").forEach(fun
       if(dir>0&&y-anchor>=36&&y>120)set(true);
       else if(dir<0&&anchor-y>=6)set(false);
     }
-    later();
   }
   window.addEventListener("scroll",function(){if(!t){t=true;requestAnimationFrame(upd);}},{passive:true});
   /* Un tocco non è uno scorrimento: il dito deve muoversi di almeno 10px */
@@ -3794,7 +3791,6 @@ document.querySelectorAll(".views [data-view], .tabbar [data-view]").forEach(fun
   window.addEventListener("keydown",function(e){if(/^(ArrowUp|ArrowDown|PageUp|PageDown|Home|End| )$/.test(e.key))moved=Date.now();});
   /* Con la tastiera esterna (Tab) intestazione e barra tornano se il fuoco ci arriva sopra */
   document.addEventListener("focusin",function(e){if(e.target.closest&&e.target.closest(".top,.tabbar"))set(false);});
-  document.addEventListener("focusout",function(){setTimeout(later,0);});
   window.addEventListener("hashchange",function(){set(false);});
   if(phone.addEventListener)phone.addEventListener("change",function(){if(!phone.matches)set(false);});
 })();
